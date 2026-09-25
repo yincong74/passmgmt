@@ -22,6 +22,7 @@
 - TOTP/2FA 码生成
 - 分组 / 标签（用户已明确不需要）
 - 移动端
+- CLI 命令行接口 / AI Agent 调用（本期不做；架构预留扩展点，见 §4。将来如需给 Agent 开放读取密码，必须另行设计防护：只写不读、白名单、逐次人工确认等）
 
 ## 3. 技术选型
 
@@ -49,9 +50,12 @@ Rust 未安装，实现阶段第一步用 rustup 安装（一次性前置工作�
 │  解锁屏 / 主界面 / 设置对话框（Vite + TS，仅展示与交互）        │
 │        │ Tauri IPC（invoke command）                           │
 │  Rust 后端                                                     │
+│  ┌ pmgr-core（core/ 纯逻辑 crate，未来 CLI/MCP 直接复用）─────┐ │
+│  │ vault.rs     — 加密/解密、数据模型、原子保存、.bak         │ │
+│  │ generator.rs — 密码生成器                                 │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│  src-tauri（GUI crate，依赖 pmgr-core）：                        │
 │  commands.rs  — IPC 命令入口、鉴权（未解锁一律拒绝）            │
-│  vault.rs     — 加密/解密、数据模型、原子保存、.bak             │
-│  generator.rs — 密码生成器                                     │
 │  clipboard.rs — 复制 + 定时清除线程                            │
 │  state.rs     — 应用状态（内存中的 vault、密钥、设置、计时器）   │
 └────────────────────────────────────────────────────────────────┘
@@ -65,7 +69,8 @@ Rust 未安装，实现阶段第一步用 rustup 安装（一次性前置工作�
 原则：
 
 - **主密码与派生密钥永远不离开 Rust 侧**，前端只通过 IPC 收发明文条目数据（解锁状态下展示所必需）。
-- 核心逻辑（vault、generator）不依赖 Tauri API，可独立单元测试。
+- **核心逻辑独立成 library crate（`pmgr-core`）**：vault（加密/数据模型/原子保存）、generator（密码生成）不依赖任何 Tauri/GUI API，可独立单元测试。Cargo workspace 组织：`core/`（pmgr-core lib）+ `src-tauri/`（GUI 可执行 crate，依赖 pmgr-core）。
+- **预留扩展点（本期不实现）**：将来新增 `pmgr-cli` 可执行 crate（headless 子命令）或 MCP server，直接复用 `pmgr-core`，无需改动 GUI；届时再按需设计 Agent 访问的安全防护（只写不读、应用白名单、逐次人工确认等，见 §2 非目标）。
 - 前端逻辑保持极薄：状态渲染、过滤、事件转发。
 
 ## 5. 数据模型与文件格式
@@ -192,7 +197,7 @@ Rust 未安装，实现阶段第一步用 rustup 安装（一次性前置工作�
 
 ## 11. 测试策略
 
-**Rust 单元测试（`cargo test`，核心逻辑与 Tauri 解耦）：**
+**Rust 单元测试（`cargo test -p pmgr-core`，核心逻辑在独立 crate 中，与 Tauri 解耦）：**
 
 - vault：创建→解锁→增删改条目→保存→重新解锁数据一致（往返）
 - 错误主密码解锁必须失败；篡改密文一个字节必须失败（GCM 认证）
@@ -211,12 +216,17 @@ Rust 未安装，实现阶段第一步用 rustup 安装（一次性前置工作�
 
 ```
 password/
-├── src-tauri/
+├── Cargo.toml             # workspace: members = ["core", "src-tauri"]
+├── core/                  # pmgr-core：纯逻辑 library crate（未来 CLI/MCP 复用）
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── vault.rs       # 加密、数据模型、原子保存、.bak
+│       └── generator.rs   # 密码生成
+├── src-tauri/             # GUI 可执行 crate（依赖 pmgr-core）
 │   ├── src/
 │   │   ├── main.rs        # Tauri 入口、命令注册
 │   │   ├── commands.rs    # IPC 命令
-│   │   ├── vault.rs       # 加密、数据模型、原子保存
-│   │   ├── generator.rs   # 密码生成
 │   │   ├── clipboard.rs   # 复制与定时清除
 │   │   └── state.rs       # 应用状态管理
 │   ├── Cargo.toml
