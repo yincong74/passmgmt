@@ -62,8 +62,9 @@ Rust 未安装，实现阶段第一步用 rustup 安装（一次性前置工作�
          │
          ▼
   vault.enc（应用数据目录）        GitHub Actions（发布构建）
-  Windows: %APPDATA%\password-manager\
-  Linux:   ~/.config/password-manager/
+  Windows: %APPDATA%\com.pmgr.password-manager\
+  Linux:   ~/.config/com.pmgr.password-manager/
+  （目录名 = Tauri identifier，由 app_data_dir() 提供）
 ```
 
 原则：
