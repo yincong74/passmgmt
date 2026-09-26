@@ -2,7 +2,6 @@ import {
   save as saveDialog,
   open as openDialog,
   confirm as confirmDialog,
-  prompt as promptDialog,
 } from "@tauri-apps/plugin-dialog";
 import * as api from "../api";
 import { state } from "../state";
@@ -76,17 +75,13 @@ export async function openSettings(): Promise<void> {
   };
 
   document.getElementById("set-import")!.onclick = async () => {
+    const backupPw = pwVal("set-importpw");
+    if (!backupPw) { toast("请先填写「备份文件的主密码」"); return; }
     const path = await openDialog({
       multiple: false,
       filters: [{ name: "加密备份", extensions: ["enc"] }],
     });
     if (!path) return;
-    const backupPw = await promptDialog("请输入该备份文件的主密码：", {
-      title: "导入备份",
-      okLabel: "下一步",
-      cancelLabel: "取消",
-    });
-    if (backupPw === null) return;
     const ok = await confirmDialog(
       "导入将覆盖当前全部数据（当前数据文件会保留 .bak 备份）。确定继续？",
       { title: "确认导入", kind: "warning" },
@@ -94,6 +89,7 @@ export async function openSettings(): Promise<void> {
     if (!ok) return;
     try {
       await api.backupImport(String(path), backupPw);
+      (document.getElementById("set-importpw") as HTMLInputElement).value = "";
       dlg.classList.add("hidden");
       toast("导入成功，正在重新载入…");
       window.setTimeout(() => location.reload(), 800);
