@@ -1,0 +1,18 @@
+[package]
+name = "pmgr-core"
+version = "0.1.0"
+edition = "2021"
+description = "密码管理器核心逻辑：数据模型、加密、密码生成（无 GUI 依赖）"
+
+[dependencies]
+argon2 = "0.5"
+aes-gcm = "0.10"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+zeroize = { version = "1", features = ["derive"] }
+thiserror = "1"
+
+[dev-dependencies]
+tempfile = "3"
