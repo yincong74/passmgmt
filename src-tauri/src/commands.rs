@@ -209,3 +209,26 @@ pub fn master_password_change(
     new_password.zeroize();
     result
 }
+
+#[tauri::command]
+pub fn clipboard_copy(
+    state: State<'_, AppState>,
+    text: String,
+    secret: bool,
+) -> Result<(), String> {
+    state.touch();
+    crate::clipboard::copy_text(&text)?;
+    if secret {
+        let secs = state
+            .vault
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|v| v.data.settings.clipboard_clear_seconds)
+            .unwrap_or(0);
+        if secs > 0 {
+            crate::clipboard::schedule_clear(text, secs);
+        }
+    }
+    Ok(())
+}

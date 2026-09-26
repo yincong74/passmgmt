@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod clipboard;
 mod commands;
 mod state;
 
@@ -25,7 +26,8 @@ fn main() {
             commands::password_generate,
             commands::backup_export,
             commands::backup_import,
-            commands::master_password_change
+            commands::master_password_change,
+            commands::clipboard_copy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
