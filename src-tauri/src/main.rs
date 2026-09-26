@@ -16,7 +16,16 @@ fn main() {
             commands::vault_create,
             commands::vault_unlock,
             commands::vault_lock,
-            commands::activity_ping
+            commands::activity_ping,
+            commands::entries_list,
+            commands::entry_save,
+            commands::entry_delete,
+            commands::settings_get,
+            commands::settings_save,
+            commands::password_generate,
+            commands::backup_export,
+            commands::backup_import,
+            commands::master_password_change
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
