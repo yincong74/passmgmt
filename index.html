@@ -1,8 +1,103 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8" /><title>密码管理器</title></head>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>密码管理器</title>
+<link rel="stylesheet" href="/src/styles.css" />
+</head>
 <body>
-  <div id="app">脚手架 OK</div>
+  <!-- 解锁 / 首次创建主密码 -->
+  <section id="screen-lock" class="screen hidden">
+    <div class="lock-box">
+      <h1>🔐 密码管理器</h1>
+      <div id="lock-create-fields" class="hidden">
+        <p class="hint">首次使用，请创建主密码（至少 8 位）。主密码无法找回，请务必牢记！</p>
+        <input type="password" id="create-pw1" placeholder="主密码" autocomplete="off" />
+        <input type="password" id="create-pw2" placeholder="确认主密码" autocomplete="off" />
+        <div id="create-strength" class="hint"></div>
+        <button id="btn-create" class="primary block" type="button">创建并进入</button>
+      </div>
+      <div id="lock-unlock-fields" class="hidden">
+        <input type="password" id="unlock-pw" placeholder="主密码" autocomplete="off" />
+        <button id="btn-unlock" class="primary block" type="button">解锁</button>
+        <p class="hint">忘记密码？无法找回。若有加密备份文件且记得其主密码，可重置数据后导入恢复。</p>
+      </div>
+      <div id="lock-error" class="error hidden"></div>
+    </div>
+  </section>
+
+  <!-- 主界面 -->
+  <section id="screen-main" class="screen hidden">
+    <header id="toolbar">
+      <input type="search" id="search" placeholder="搜索应用名 / 用户名 / URL / 备注…" />
+      <button id="btn-add" class="primary" type="button">＋ 新增条目</button>
+      <button id="btn-settings" type="button">⚙ 设置</button>
+      <button id="btn-lock" type="button">🔒 锁定</button>
+    </header>
+    <div id="main-body">
+      <aside id="entry-list"></aside>
+      <main id="entry-detail"></main>
+    </div>
+  </section>
+
+  <!-- 条目编辑对话框（含密码生成器面板） -->
+  <div id="dialog-editor" class="dialog-backdrop hidden">
+    <div class="dialog">
+      <h2 id="ed-title">新增条目</h2>
+      <label>应用名 *<input id="ed-app" type="text" placeholder="例如：Gmail、网银" /></label>
+      <label>用户名<input id="ed-username" type="text" autocomplete="off" /></label>
+      <label>密码
+        <span class="row">
+          <input id="ed-password" type="text" autocomplete="off" />
+          <button id="ed-generate" class="small" type="button">生成…</button>
+        </span>
+      </label>
+      <div id="ed-gen" class="gen-panel hidden">
+        <label class="inline">长度 <input id="gen-length" type="range" min="8" max="64" value="20" /> <span id="gen-length-val">20</span></label>
+        <label class="inline"><input id="gen-lower" type="checkbox" checked /> 小写 a-z</label>
+        <label class="inline"><input id="gen-upper" type="checkbox" checked /> 大写 A-Z</label>
+        <label class="inline"><input id="gen-digits" type="checkbox" checked /> 数字 0-9</label>
+        <label class="inline"><input id="gen-symbols" type="checkbox" checked /> 符号 !@#$…</label>
+        <label class="inline"><input id="gen-amb" type="checkbox" checked /> 排除易混淆字符 0O1lI|</label>
+        <output id="gen-out" class="gen-out"></output>
+        <div class="row">
+          <button id="gen-go" class="small" type="button">重新生成</button>
+          <button id="gen-use" class="small primary" type="button">使用此密码</button>
+        </div>
+      </div>
+      <label>URL<input id="ed-url" type="text" placeholder="https://…" /></label>
+      <label>备注<textarea id="ed-notes" rows="3"></textarea></label>
+      <div class="row right">
+        <button id="ed-cancel" type="button">取消</button>
+        <button id="ed-save" class="primary" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置对话框 -->
+  <div id="dialog-settings" class="dialog-backdrop hidden">
+    <div class="dialog">
+      <h2>设置</h2>
+      <h3>常规</h3>
+      <label>自动锁定超时（分钟，0 = 关闭）<input id="set-autolock" type="number" min="0" max="720" /></label>
+      <label>剪贴板自动清除（秒，0 = 关闭）<input id="set-clip" type="number" min="0" max="3600" /></label>
+      <button id="set-save" class="primary" type="button">保存设置</button>
+      <h3>修改主密码</h3>
+      <label>当前主密码<input id="set-oldpw" type="password" autocomplete="off" /></label>
+      <label>新主密码（至少 8 位）<input id="set-newpw" type="password" autocomplete="off" /></label>
+      <label>确认新主密码<input id="set-newpw2" type="password" autocomplete="off" /></label>
+      <button id="set-chpw" type="button">修改主密码</button>
+      <h3>备份</h3>
+      <div class="row">
+        <button id="set-export" type="button">导出加密备份…</button>
+        <button id="set-import" type="button">导入备份（覆盖当前数据）…</button>
+      </div>
+      <div class="row right"><button id="set-cancel" type="button">关闭</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
