@@ -37,8 +37,15 @@ pub fn vault_create(
         master_password.zeroize();
         return Err("主密码至少 8 位".into());
     }
-    let path = vault_path(&app)?;
+    let path = match vault_path(&app) {
+        Ok(p) => p,
+        Err(e) => {
+            master_password.zeroize();
+            return Err(e);
+        }
+    };
     if path.exists() {
+        master_password.zeroize();
         return Err("数据文件已存在，不能重复创建".into());
     }
     let result = Vault::create(&path, &master_password).map_err(|e| e.to_string());
@@ -197,6 +204,8 @@ pub fn master_password_change(
     mut new_password: String,
 ) -> Result<(), String> {
     if new_password.len() < 8 {
+        old_password.zeroize();
+        new_password.zeroize();
         return Err("新主密码至少 8 位".into());
     }
     let result = with_vault(&state, |v| {
@@ -213,11 +222,17 @@ pub fn master_password_change(
 #[tauri::command]
 pub fn clipboard_copy(
     state: State<'_, AppState>,
-    text: String,
+    mut text: String,
     secret: bool,
 ) -> Result<(), String> {
     state.touch();
-    crate::clipboard::copy_text(&text)?;
+    let copy_result = crate::clipboard::copy_text(&text);
+    if copy_result.is_err() {
+        if secret {
+            text.zeroize();
+        }
+        return copy_result;
+    }
     if secret {
         let secs = state
             .vault
@@ -227,8 +242,11 @@ pub fn clipboard_copy(
             .map(|v| v.data.settings.clipboard_clear_seconds)
             .unwrap_or(0);
         if secs > 0 {
+            // text 移交给清除线程，用于到期比较；线程结束时释放
             crate::clipboard::schedule_clear(text, secs);
+            return Ok(());
         }
+        text.zeroize();
     }
     Ok(())
 }

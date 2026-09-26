@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -126,14 +126,16 @@ pub fn encrypt_payload(
     Ok((nonce_bytes, ciphertext))
 }
 
+/// 解密结果用 Zeroizing 包裹：drop 时自动清零明文（Review Important #1）。
 pub fn decrypt_payload(
     key: &[u8; KEY_LEN],
     nonce: &[u8; NONCE_LEN],
     ciphertext: &[u8],
-) -> Result<Vec<u8>, VaultError> {
+) -> Result<Zeroizing<Vec<u8>>, VaultError> {
     let cipher = Aes256Gcm::new(key.into());
     cipher
         .decrypt(Nonce::from_slice(nonce), ciphertext)
+        .map(Zeroizing::new)
         .map_err(|_| VaultError::WrongPasswordOrCorrupt)
 }
 
@@ -178,6 +180,11 @@ pub fn decode_file(bytes: &[u8]) -> Result<FileParts, VaultError> {
     let m = u32::from_le_bytes(bytes[o..o + 4].try_into().unwrap());
     let t = u32::from_le_bytes(bytes[o + 4..o + 8].try_into().unwrap());
     let p = u32::from_le_bytes(bytes[o + 8..o + 12].try_into().unwrap());
+    // 安全要求（Review Important #3）：v1 格式参数必须恒等于生产常量，
+    // 防止篡改文件用超大 m_cost 触发解锁时 OOM/卡死
+    if (m, t, p) != (M_COST, T_COST, P_COST) {
+        return Err(VaultError::Format("KDF 参数与本版本不符（文件可能被篡改）".into()));
+    }
     let mut nonce = [0u8; NONCE_LEN];
     nonce.copy_from_slice(&bytes[o + 12..o + 12 + NONCE_LEN]);
     let ciphertext = bytes[HEADER_LEN..].to_vec();
@@ -222,8 +229,10 @@ impl Vault {
 
     /// 保存：写 .tmp → 旧文件留 .bak → 原子 rename（spec §5.3 保存流程）。
     pub fn save(&mut self) -> Result<(), VaultError> {
-        let plaintext =
-            serde_json::to_vec(&self.data).map_err(|e| VaultError::Crypto(e.to_string()))?;
+        // 序列化缓冲区含全部明文密码，用 Zeroizing 保证 drop 时清零（Review Important #1）
+        let plaintext = Zeroizing::new(
+            serde_json::to_vec(&self.data).map_err(|e| VaultError::Crypto(e.to_string()))?,
+        );
         let (nonce, ciphertext) = encrypt_payload(&self.key, &plaintext)?;
         let bytes = encode_file(&self.salt, self.params, &nonce, &ciphertext);
         let tmp = self.path.with_extension("enc.tmp");
@@ -236,16 +245,29 @@ impl Vault {
     }
 
     /// 修改主密码：验证旧密码 → 新 salt 重派生 → 重加密落盘（spec §5.3）。
+    /// save 失败时回滚内存密钥/salt，避免内存与磁盘密钥分叉（Review Important #2）。
     pub fn change_password(&mut self, old: &str, new: &str) -> Result<(), VaultError> {
         let check = derive_key(old, &self.salt, self.params.0, self.params.1, self.params.2)?;
         if check != self.key {
             return Err(VaultError::WrongPasswordOrCorrupt);
         }
+        let mut old_key = self.key;
+        let old_salt = self.salt;
         let mut salt = [0u8; SALT_LEN];
         rand::rngs::OsRng.fill_bytes(&mut salt);
         self.key = derive_key(new, &salt, self.params.0, self.params.1, self.params.2)?;
         self.salt = salt;
-        self.save()
+        match self.save() {
+            Ok(()) => {
+                old_key.zeroize();
+                Ok(())
+            }
+            Err(e) => {
+                self.key = old_key;
+                self.salt = old_salt;
+                Err(e)
+            }
+        }
     }
 
     /// 导入备份：用备份自己的主密码验证解密 → 替换数据 → 用当前密钥重加密落盘（spec §6.4）。
@@ -357,7 +379,17 @@ mod crypto_tests {
         let key = [3u8; KEY_LEN];
         let (nonce, ct) = encrypt_payload(&key, b"hello vault").unwrap();
         let pt = decrypt_payload(&key, &nonce, &ct).unwrap();
-        assert_eq!(pt, b"hello vault");
+        assert_eq!(pt.as_slice(), b"hello vault");
+    }
+
+    #[test]
+    fn decrypt_payload_returns_zeroizing_buffer() {
+        // Review Important #1：解密返回的明文缓冲区必须自动清零（Zeroizing），
+        // 类型即契约——此测试通过显式类型标注锁死 API
+        let key = [3u8; KEY_LEN];
+        let (nonce, ct) = encrypt_payload(&key, b"secret").unwrap();
+        let pt: zeroize::Zeroizing<Vec<u8>> = decrypt_payload(&key, &nonce, &ct).unwrap();
+        assert_eq!(pt.as_slice(), b"secret");
     }
 
     #[test]
@@ -405,6 +437,17 @@ mod crypto_tests {
         let mut badver = encode_file(&[1u8; SALT_LEN], (M_COST, T_COST, P_COST), &[2u8; NONCE_LEN], &[9u8; 64]);
         badver[4] = 99;
         assert!(matches!(decode_file(&badver), Err(VaultError::Format(_))));
+    }
+
+    #[test]
+    fn decode_rejects_tampered_kdf_params() {
+        // Review Important #3：篡改文件内 Argon2 参数（如超大 m_cost）必须被拒绝，
+        // 否则解锁时按文件参数执行 KDF 可触发数 GiB 分配（OOM/卡死）
+        let mut bytes = encode_file(&[1u8; SALT_LEN], (M_COST, T_COST, P_COST), &[2u8; NONCE_LEN], &[9u8; 64]);
+        let huge: u32 = 0x7FFF_FFFF;
+        let o = 5 + SALT_LEN; // m_cost 偏移
+        bytes[o..o + 4].copy_from_slice(&huge.to_le_bytes());
+        assert!(matches!(decode_file(&bytes), Err(VaultError::Format(_))));
     }
 }
 
@@ -497,6 +540,29 @@ mod vault_tests {
         let v2 = Vault::open(&path, "new-pass-456").unwrap();
         assert_eq!(v2.data.entries.len(), 1);
         assert_eq!(v2.data.entries[0].app_name, "Bank");
+    }
+
+    #[test]
+    fn change_password_rolls_back_on_save_failure() {
+        // Review Important #2：save 失败时内存密钥必须回滚，
+        // 否则内存/磁盘密钥分叉，后续保存会让用户被旧密码锁在门外
+        let dir = tempfile::tempdir().unwrap();
+        let path = vp(dir.path());
+        let mut v = Vault::create(&path, "old-pass-123").unwrap();
+        v.data.entries.push(Entry::new("X".into(), "".into(), "".into(), "".into(), "".into(), 1));
+        v.save().unwrap();
+        // 制造 save 失败：把路径指向不存在的目录
+        let good = v.path.clone();
+        v.path = good.join("missing-dir").join("vault.enc");
+        let err = v.change_password("old-pass-123", "new-pass-456");
+        assert!(err.is_err());
+        // 回滚验证：恢复路径后保存，旧密码必须仍能解锁
+        v.path = good;
+        v.save().unwrap();
+        drop(v);
+        let v2 = Vault::open(&path, "old-pass-123").unwrap();
+        assert_eq!(v2.data.entries.len(), 1);
+        assert!(matches!(Vault::open(&path, "new-pass-456"), Err(VaultError::WrongPasswordOrCorrupt)));
     }
 
     #[test]
