@@ -14,7 +14,9 @@
 
 ## 下载安装
 
-从 GitHub Releases 下载：
+暂未发布安装包，请从源码构建（见下节）。
+
+发布 `v*` tag 后，GitHub Actions 会自动构建并上传到 GitHub Releases：
 
 - **Windows**：`password-manager_x.y.z_x64-setup.exe`（NSIS 安装包）
 - **Linux**：`AppImage`（`chmod +x` 后直接运行）或 `.deb`（`sudo apt install ./xxx.deb`）
