@@ -103,6 +103,9 @@ async function importBackup(): Promise<void> {
 
 export async function renderSettings(el: HTMLElement): Promise<void> {
   const bioOn = await api.biometricEnabled().catch(() => false);
+  // spec §5：设备无生物识别时禁用开关并提示（review M1）；checkStatus 失败按不可用处理
+  const bioStatus = await checkStatus().catch(() => null);
+  const bioAvailable = bioStatus?.isAvailable === true && bioStatus.biometryType !== BiometryType.None;
   el.innerHTML = `
     <div class="m-page">
       <div class="m-nav"><h2>设置</h2></div>
@@ -115,8 +118,12 @@ export async function renderSettings(el: HTMLElement): Promise<void> {
       <button class="primary m-big" id="m-set-save" type="button">保存设置</button>
 
       <h3 class="m-section">生物识别解锁</h3>
-      <p class="m-hint">开启后日常解锁可用指纹/人脸；主密码始终可用作兜底。修改主密码后需重新开启。</p>
-      <button class="m-big" id="m-set-bio" type="button">${bioOn ? "关闭生物识别解锁" : "开启生物识别解锁"}</button>
+      <p class="m-hint">${
+        bioOn || bioAvailable
+          ? "开启后日常解锁可用指纹/人脸；主密码始终可用作兜底。修改主密码后需重新开启。"
+          : "设备未录入指纹/人脸，请先在系统设置中添加，再开启此功能。"
+      }</p>
+      <button class="m-big" id="m-set-bio" type="button"${bioOn || bioAvailable ? "" : " disabled"}>${bioOn ? "关闭生物识别解锁" : "开启生物识别解锁"}</button>
 
       <h3 class="m-section">修改主密码</h3>
       <label class="m-field">当前主密码<input id="m-set-oldpw" type="password" autocomplete="off" /></label>

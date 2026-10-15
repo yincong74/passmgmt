@@ -73,8 +73,10 @@ export async function showMobileLock(): Promise<void> {
   state.selectedId = null;
   state.query = "";
   state.showPassword = false;
-  const status = await api.vaultStatus().catch(() => ({ exists: true, unlocked: false }));
+  // 纵深防御（review M2）：先擦除上一页可能残留的明文 DOM，再等 IPC
   const el = document.getElementById("m-pages")!;
+  el.innerHTML = "";
+  const status = await api.vaultStatus().catch(() => ({ exists: true, unlocked: false }));
   el.innerHTML = `<div class="m-lock"><div class="m-lock-box">
       <h1>🔐 密码管理器</h1>
       ${status.exists ? UNLOCK_FORM : CREATE_FORM}

@@ -48,6 +48,7 @@
 .m-row button { min-height: 44px; }
 .m-flex1 { flex: 1; }
 button.m-big { min-height: 48px; font-size: 15px; }
+#m-root button:disabled { opacity: 0.45; }
 .m-hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .m-empty { padding: 16px; }
 .m-section { font-size: 14px; color: var(--muted); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
