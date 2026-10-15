@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Android 端专属权限",
+  "platforms": ["android"],
+  "windows": ["main"],
+  "permissions": [
+    "biometric:default",
+    "keystore:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "**" }, { "path": "content://**" }]
+    }
+  ]
+}
