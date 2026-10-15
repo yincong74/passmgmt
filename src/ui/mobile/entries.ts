@@ -37,6 +37,10 @@ function renderMList(): void {
         state.query ? "无匹配条目" : "还没有条目，点击右下「＋」新建"
       }</p>`;
   el.querySelectorAll<HTMLElement>(".m-card").forEach((c) => {
-    c.onclick = () => pushPage((p) => renderDetail(p, c.dataset.id!));
+    c.onclick = () => {
+      // 每次进入详情都要求重新显式揭示密码（镜像桌面 list.ts 选中重置，review Task13#1）
+      state.showPassword = false;
+      pushPage((p) => renderDetail(p, c.dataset.id!));
+    };
   });
 }
