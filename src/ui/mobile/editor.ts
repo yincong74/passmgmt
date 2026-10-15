@@ -81,6 +81,9 @@ export function renderEditor(el: HTMLElement, entry: api.Entry | null): void {
   document.getElementById("m-ed-save")!.onclick = async () => {
     const appName = val("m-ed-app").trim();
     if (!appName) { toast("应用名不能为空"); return; }
+    // 防双击重复保存（review Task14 I1）：请求期间禁用按钮，失败再恢复
+    const saveBtn = document.getElementById("m-ed-save") as HTMLButtonElement;
+    saveBtn.disabled = true;
     const payload: api.Entry = {
       id: entry?.id ?? "",
       app_name: appName,
@@ -100,6 +103,7 @@ export function renderEditor(el: HTMLElement, entry: api.Entry | null): void {
       toast("已保存");
       popPage();
     } catch (err) {
+      saveBtn.disabled = false;
       toast(`保存失败：${String(err)}`);
     }
   };
