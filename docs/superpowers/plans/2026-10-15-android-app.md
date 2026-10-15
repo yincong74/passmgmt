@@ -1488,7 +1488,11 @@ function renderMList(): void {
         state.query ? "无匹配条目" : "还没有条目，点击右下「＋」新建"
       }</p>`;
   el.querySelectorAll<HTMLElement>(".m-card").forEach((c) => {
-    c.onclick = () => pushPage((p) => renderDetail(p, c.dataset.id!));
+    c.onclick = () => {
+      // 每次进入详情都要求重新显式揭示密码（镜像桌面 list.ts 选中重置，review Task13#1）
+      state.showPassword = false;
+      pushPage((p) => renderDetail(p, c.dataset.id!));
+    };
   });
 }
 ```
@@ -1692,6 +1696,9 @@ export function renderEditor(el: HTMLElement, entry: api.Entry | null): void {
   document.getElementById("m-ed-save")!.onclick = async () => {
     const appName = val("m-ed-app").trim();
     if (!appName) { toast("应用名不能为空"); return; }
+    // 防双击重复保存（review Task14 I1）：请求期间禁用按钮，失败再恢复
+    const saveBtn = document.getElementById("m-ed-save") as HTMLButtonElement;
+    saveBtn.disabled = true;
     const payload: api.Entry = {
       id: entry?.id ?? "",
       app_name: appName,
@@ -1711,6 +1718,7 @@ export function renderEditor(el: HTMLElement, entry: api.Entry | null): void {
       toast("已保存");
       popPage();
     } catch (err) {
+      saveBtn.disabled = false;
       toast(`保存失败：${String(err)}`);
     }
   };
