@@ -2101,8 +2101,11 @@ git commit -m "build(android): release 签名配置（环境变量注入，keyst
         with:
           distribution: temurin
           java-version: 17
+          cache: gradle
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
 
       - uses: swatinem/rust-cache@v2
 
@@ -2114,9 +2117,16 @@ git commit -m "build(android): release 签名配置（环境变量注入，keyst
         run: npm ci
 
       - name: Decode release keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > /tmp/pmgr-release.keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 -d > /tmp/pmgr-release.keystore
+          [ -s /tmp/pmgr-release.keystore ] || { echo "错误：ANDROID_KEYSTORE_B64 secret 未配置或为空"; exit 1; }
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Point NDK_HOME at runner NDK
+        run: echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PMGR_KEYSTORE_PATH: /tmp/pmgr-release.keystore
@@ -2126,13 +2136,14 @@ git commit -m "build(android): release 签名配置（环境变量注入，keyst
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Password Manager v__VERSION__"
-          releaseBody: "Windows: 下载 -setup.exe 安装。Linux: 下载 AppImage（chmod +x 后运行）或 .deb（sudo apt install ./xxx.deb）。Android: 下载 arm64 APK 侧载安装（需允许未知来源；升级安装须使用同一签名构建的版本）。"
+          releaseBody: "Windows: 下载 -setup.exe 安装。Linux: 下载 AppImage（chmod +x 后运行）或 .deb（sudo apt install ./xxx.deb）。Android: 下载 arm64 APK 侧载安装（需允许未知来源；覆盖升级须安装同一签名构建的版本）。"
           releaseDraft: true
           prerelease: false
-          args: android build --target aarch64 --apk
+          mobile: android
+          args: --target aarch64 --apk
 ```
 
-两个 job 使用相同 `tagName`，tauri-action 会把产物附到同一个 draft Release。
+两个 job 使用相同 `tagName`，tauri-action 会把产物附到同一个 draft Release。**审查修正（Task 17 C1/C2/I1/M1/M4，commit 5a64dfb）**：必须用 `tauri-action@v1` + `mobile: android`（v0 无 mobile 输入，会把 args 拼成非法命令）；rustup 需显式 `targets: aarch64-linux-android`；NDK_HOME 兜底导出；keystore 解码走 env 且校验非空；setup-java 开 gradle 缓存。
 
 - [ ] **Step 3: 验证 YAML 语法**
 

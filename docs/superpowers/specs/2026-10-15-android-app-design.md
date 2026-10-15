@@ -158,9 +158,10 @@
 
 ### 8.3 CI（release.yml 增加 android job）
 
-- ubuntu-latest（预装 SDK/NDK）+ JDK 17 + rustup android target
+- ubuntu-latest（预装 SDK/NDK）+ JDK 17 + rustup android target（CI 经 `dtolnay/rust-toolchain` 的 `targets: aarch64-linux-android` 安装）
+- 构建用 `tauri-action@v1` 的 `mobile: android` 模式（v0 不支持移动端构建）
 - 签名材料存 GitHub Secrets（keystore 文件 base64 + 口令）
-- 产物：`password-manager_<version>_arm64.apk` 附到 draft Release；`v*` tag 触发方式不变
+- 产物：arm64 release APK（gradle 命名 `app-arm64-release.apk`）附到 draft Release；`v*` tag 触发方式不变
 - 版本号同步清单在原有四处（package.json / tauri.conf.json / 两个 Cargo.toml）基础上新增：`gen/android` 的 versionName/versionCode 随 tauri.conf.json 自动派生，无需手动改
 
 ## 9. 测试策略
