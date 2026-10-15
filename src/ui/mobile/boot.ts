@@ -28,8 +28,8 @@ async function checkAutoLock(): Promise<void> {
 
 export async function bootMobile(): Promise<void> {
   installShell();
-  const st = await api.vaultStatus();
-  if (st.unlocked) await enterMobileMain();
+  const st = await api.vaultStatus().catch(() => null);
+  if (st?.unlocked) await enterMobileMain();
   else await showMobileLock();
   // Rust 侧自动锁定线程触发时回到解锁屏
   await listen("vault-locked", () => { void showMobileLock(); });

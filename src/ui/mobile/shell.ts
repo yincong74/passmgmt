@@ -6,6 +6,8 @@ type PageRender = (el: HTMLElement) => void | Promise<void>;
 
 const stack: PageRender[] = [];
 let currentTab: TabName = "entries";
+// 锁定屏状态：禁止 popstate 渲染任何数据页（防系统返回手势回放明文，review C1）
+let locked = false;
 
 function pages(): HTMLElement {
   return document.getElementById("m-pages")!;
@@ -31,6 +33,10 @@ export function installShell(): void {
   });
   // 系统返回手势/返回键 → popstate → 弹页面栈
   window.addEventListener("popstate", (e) => {
+    if (locked) {
+      showTabbar(false);
+      return;
+    }
     const depth: number = (e.state as { depth?: number } | null)?.depth ?? 0;
     stack.length = Math.min(stack.length, depth);
     if (stack.length === 0) {
@@ -44,6 +50,7 @@ export function installShell(): void {
 }
 
 export function switchTab(name: TabName): void {
+  locked = false;
   currentTab = name;
   stack.length = 0;
   history.replaceState({ depth: 0 }, "");
@@ -68,6 +75,7 @@ export function popPage(): void {
 
 /** 锁定屏接管：清空页面栈（不触发 history） */
 export function resetStack(): void {
+  locked = true;
   stack.length = 0;
   history.replaceState({ depth: 0 }, "");
   showTabbar(false);
