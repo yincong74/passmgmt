@@ -4,6 +4,10 @@ version = "0.1.0"
 description = "密码管理器（Tauri GUI）"
 edition = "2021"
 
+[lib]
+name = "pmgr_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
