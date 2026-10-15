@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { platform } from "@tauri-apps/plugin-os";
 import * as api from "./api";
 import { state } from "./state";
 import { initLock } from "./ui/lock";
@@ -21,6 +22,19 @@ function bump(): void {
 }
 
 async function boot(): Promise<void> {
+  // 平台分流：Android → 手机专属 UI（src/ui/mobile/）；桌面 → 现有 UI（零改动）
+  let isAndroid = false;
+  try {
+    isAndroid = (await platform()) === "android";
+  } catch {
+    isAndroid = false; // 桌面 os 插件权限缺失等异常时按桌面处理
+  }
+  if (isAndroid) {
+    const { bootMobile } = await import("./ui/mobile/boot");
+    await bootMobile();
+    return;
+  }
+
   initMain(onUnlocked);
   const st = await api.vaultStatus();
   if (st.unlocked) await enterMain();
