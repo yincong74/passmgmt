@@ -1,0 +1,74 @@
+/* 手机专属样式（复用 styles.css 的暗色主题变量） */
+#m-root { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+#m-pages { flex: 1; overflow-y: auto; min-height: 0; }
+#m-root input, #m-root textarea { font-size: 16px; padding: 12px; }
+
+/* 底部 Tab 栏 */
+#m-tabbar {
+  display: flex; border-top: 1px solid var(--border); background: var(--panel);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+#m-tabbar .tab {
+  flex: 1; background: none; border: none; border-radius: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 0 6px; color: var(--muted); font-size: 11px; min-height: 52px;
+}
+#m-tabbar .tab.active { color: var(--accent); }
+
+/* 列表页 */
+.m-toolbar {
+  position: sticky; top: 0; z-index: 5; padding: 10px 12px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.m-card { padding: 14px 16px; border-bottom: 1px solid var(--border); min-height: 52px; cursor: pointer; }
+.m-card:active { background: var(--panel2); }
+.m-card .t { font-weight: 600; word-break: break-all; }
+.m-card .s { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-all; }
+#m-fab {
+  position: fixed; right: 20px; bottom: calc(72px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; border-radius: 28px; font-size: 24px;
+  background: var(--accent); border: none; color: #fff; z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* 通用页面 */
+.m-page {
+  padding: 16px; padding-top: calc(12px + env(safe-area-inset-top));
+  display: flex; flex-direction: column; gap: 12px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+.m-nav { display: flex; align-items: center; gap: 8px; }
+.m-nav h2 { font-size: 17px; flex: 1; word-break: break-all; }
+.m-btn-back { font-size: 16px; min-width: 44px; min-height: 44px; }
+.m-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.m-inline { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: var(--text); }
+.m-inline input[type="checkbox"], .m-inline input[type="range"] { width: auto; }
+.m-row { display: flex; gap: 8px; align-items: center; }
+.m-row button { min-height: 44px; }
+.m-flex1 { flex: 1; }
+button.m-big { min-height: 48px; font-size: 15px; }
+.m-hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.m-empty { padding: 16px; }
+.m-section { font-size: 14px; color: var(--muted); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+
+/* 解锁屏 */
+.m-lock { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.m-lock-box { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; }
+.m-lock-box h1 { font-size: 20px; text-align: center; }
+
+/* 详情页 */
+.m-detail-row { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.m-detail-row .k { color: var(--muted); font-size: 12px; }
+.m-detail-row .v { word-break: break-all; font-family: Consolas, monospace; }
+.m-pre-wrap { white-space: pre-wrap; }
+
+/* 生成器 */
+.m-gen {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.m-gen-out {
+  font-family: Consolas, monospace; background: var(--panel2); padding: 12px;
+  border-radius: 8px; word-break: break-all; min-height: 44px;
+}
