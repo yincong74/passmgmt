@@ -35,7 +35,9 @@ pub fn run() {
             commands::backup_export,
             commands::backup_import,
             commands::master_password_change,
-            commands::clipboard_copy
+            commands::clipboard_copy,
+            commands::backup_export_data,
+            commands::backup_import_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

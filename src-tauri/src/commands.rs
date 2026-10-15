@@ -251,3 +251,29 @@ pub fn clipboard_copy(
     }
     Ok(())
 }
+
+// ---------- Android 备份桥接（content URI 无法用 std::fs 读，改走字节 IPC，spec §6.2） ----------
+
+/// 需解锁；返回 vault.enc 原始字节。出 Rust 的只有密文，永不导出明文。
+#[tauri::command]
+pub fn backup_export_data(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<u8>, String> {
+    with_vault(&state, |_| {
+        let path = vault_path(&app)?;
+        std::fs::read(&path).map_err(|e| e.to_string())
+    })
+}
+
+/// 需解锁；字节来自前端经 fs 插件读取的用户所选备份文件。
+#[tauri::command]
+pub fn backup_import_data(
+    state: State<'_, AppState>,
+    data: Vec<u8>,
+    mut backup_password: String,
+) -> Result<(), String> {
+    let result = with_vault(&state, |v| {
+        v.import_backup_bytes(&data, &backup_password)
+            .map_err(|_| "备份文件验证失败：主密码错误或文件已损坏".to_string())
+    });
+    backup_password.zeroize();
+    result
+}

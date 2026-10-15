@@ -54,3 +54,6 @@ export const backupImport = (srcPath: string, backupPassword: string): Promise<v
   invoke("backup_import", { srcPath, backupPassword });
 export const masterPasswordChange = (oldPassword: string, newPassword: string): Promise<void> =>
   invoke("master_password_change", { oldPassword, newPassword });
+export const backupExportData = (): Promise<number[]> => invoke("backup_export_data");
+export const backupImportData = (data: number[], backupPassword: string): Promise<void> =>
+  invoke("backup_import_data", { data, backupPassword });
