@@ -191,6 +191,23 @@ pub fn decode_file(bytes: &[u8]) -> Result<FileParts, VaultError> {
     Ok(FileParts { salt, params: (m, t, p), nonce, ciphertext })
 }
 
+/// 密钥 hex 编码（生物识别注册流程用；GUI 层经 IPC 传输密钥的编码形式）。
+pub fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// 严格解析 KEY_LEN 字节的 hex 密钥（拒绝非规范输入：长度、非 hex 字符、非 ASCII）。
+pub fn hex_decode_key(s: &str) -> Option<[u8; KEY_LEN]> {
+    if s.len() != KEY_LEN * 2 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut out = [0u8; KEY_LEN];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
 // ---------- Vault：解锁后的内存句柄 + 文件操作（spec §5.3、§6.4） ----------
 
 /// 已解锁的 vault。Drop 时 zeroize 密钥与全部明文。
@@ -477,6 +494,18 @@ mod crypto_tests {
         let o = 5 + SALT_LEN; // m_cost 偏移
         bytes[o..o + 4].copy_from_slice(&huge.to_le_bytes());
         assert!(matches!(decode_file(&bytes), Err(VaultError::Format(_))));
+    }
+
+    #[test]
+    fn hex_roundtrip_and_strict_validation() {
+        let key = [0xab; KEY_LEN];
+        let hex = hex_encode(&key);
+        assert_eq!(hex.len(), KEY_LEN * 2);
+        assert_eq!(hex_decode_key(&hex), Some(key));
+        // 长度不符 / 非 hex 字符 / 前导 + 号（from_str_radix 宽松行为）一律拒绝
+        assert_eq!(hex_decode_key(&hex[..62]), None);
+        assert_eq!(hex_decode_key(&format!("z{}", &hex[1..])), None);
+        assert_eq!(hex_decode_key(&format!("+{}", &hex[1..])), None);
     }
 }
 

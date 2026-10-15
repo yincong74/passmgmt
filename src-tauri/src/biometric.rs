@@ -3,8 +3,8 @@
 //! 存/取均强制生物识别），由前端 JS 桥接；Rust 侧只管理启用标记文件 biometric.json，
 //! 其中不含任何密钥材料。
 
-use pmgr_core::vault::{Vault, KEY_LEN};
-use serde::{Deserialize, Serialize};
+use pmgr_core::vault::{hex_decode_key, hex_encode, Vault};
+use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 use zeroize::Zeroize;
@@ -17,7 +17,7 @@ use crate::state::AppState;
 pub const KEYSTORE_ALIAS: &str = "pmgr_vault_key";
 const FLAG_FILE: &str = "biometric.json";
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct Flag {
     enabled: bool,
 }
@@ -31,6 +31,9 @@ fn flag_path(app: &AppHandle) -> Result<PathBuf, String> {
 pub fn set_flag(app: &AppHandle, enabled: bool) -> Result<(), String> {
     let p = flag_path(app)?;
     if enabled {
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
         let json = serde_json::to_string(&Flag { enabled: true }).unwrap();
         std::fs::write(&p, json).map_err(|e| e.to_string())
     } else {
@@ -39,21 +42,6 @@ pub fn set_flag(app: &AppHandle, enabled: bool) -> Result<(), String> {
         }
         Ok(())
     }
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-fn hex_decode_key(s: &str) -> Option<[u8; KEY_LEN]> {
-    if s.len() != KEY_LEN * 2 {
-        return None;
-    }
-    let mut out = [0u8; KEY_LEN];
-    for (i, b) in out.iter_mut().enumerate() {
-        *b = u8::from_str_radix(s.get(i * 2..i * 2 + 2)?, 16).ok()?;
-    }
-    Some(out)
 }
 
 #[tauri::command]
@@ -89,8 +77,9 @@ pub fn vault_unlock_with_key(
 ) -> Result<(), String> {
     state.touch();
     let path = vault_path(&app)?;
-    let mut key = hex_decode_key(&key_hex).ok_or("生物识别密钥已失效，请使用主密码解锁")?;
+    let decoded = hex_decode_key(&key_hex);
     key_hex.zeroize();
+    let mut key = decoded.ok_or("生物识别密钥已失效，请使用主密码解锁")?;
     let result = Vault::open_with_key(&path, &key)
         .map_err(|_| "生物识别密钥已失效，请使用主密码解锁".to_string());
     key.zeroize();
