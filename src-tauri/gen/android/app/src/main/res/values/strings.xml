@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">"password-manager"</string>
+    <string name="main_activity_title">"password-manager"</string>
+</resources>
