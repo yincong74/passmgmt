@@ -221,12 +221,13 @@ pub fn master_password_change(
 
 #[tauri::command]
 pub fn clipboard_copy(
+    app: AppHandle,
     state: State<'_, AppState>,
     mut text: String,
     secret: bool,
 ) -> Result<(), String> {
     state.touch();
-    let copy_result = crate::clipboard::copy_text(&text);
+    let copy_result = crate::clipboard::copy_text(&app, &text);
     if copy_result.is_err() {
         if secret {
             text.zeroize();
@@ -243,7 +244,7 @@ pub fn clipboard_copy(
             .unwrap_or(0);
         if secs > 0 {
             // text 移交给清除线程，用于到期比较；线程结束时释放
-            crate::clipboard::schedule_clear(text, secs);
+            crate::clipboard::schedule_clear(app, text, secs);
             return Ok(());
         }
         text.zeroize();
