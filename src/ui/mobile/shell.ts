@@ -83,15 +83,18 @@ export function resetStack(): void {
 
 async function renderTab(name: TabName): Promise<void> {
   const el = pages();
-  // 动态 import 打破 shell ↔ 页面模块的循环依赖
+  // 动态 import 打破 shell ↔ 页面模块的循环依赖；await 期间可能进入锁定态，渲染前复查
   if (name === "entries") {
     const { renderEntries } = await import("./entries");
+    if (locked) return;
     await renderEntries(el);
   } else if (name === "generate") {
     const { renderGenerate } = await import("./generate");
+    if (locked) return;
     renderGenerate(el);
   } else {
     const { renderSettings } = await import("./settings");
+    if (locked) return;
     await renderSettings(el);
   }
 }
