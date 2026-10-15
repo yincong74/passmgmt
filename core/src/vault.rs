@@ -276,6 +276,23 @@ impl Vault {
         self.data = imported;
         self.save()
     }
+
+    /// 用裸密钥直接解锁（跳过 Argon2）。仅供生物识别等已持有密钥的可信路径使用；
+    /// GCM 校验失败统一返回 WrongPasswordOrCorrupt，不泄露失败原因。
+    pub fn open_with_key(path: impl Into<PathBuf>, key: &[u8; KEY_LEN]) -> Result<Self, VaultError> {
+        let path = path.into();
+        let bytes = std::fs::read(&path)?;
+        let parts = decode_file(&bytes)?;
+        let plaintext = decrypt_payload(key, &parts.nonce, &parts.ciphertext)?;
+        let data: VaultData =
+            serde_json::from_slice(&plaintext).map_err(|_| VaultError::WrongPasswordOrCorrupt)?;
+        Ok(Self { path, salt: parts.salt, params: parts.params, key: *key, data })
+    }
+
+    /// 导出当前 vault 密钥（Zeroizing 保证用后清零）。仅供生物识别注册流程使用。
+    pub fn export_key(&self) -> Zeroizing<[u8; KEY_LEN]> {
+        Zeroizing::new(self.key)
+    }
 }
 
 impl Drop for Vault {
@@ -601,5 +618,37 @@ mod vault_tests {
         drop(va);
         let reopened = Vault::open(&path_a, "password-A1").unwrap();
         assert_eq!(reopened.data.entries[0].app_name, "AppB");
+    }
+
+    #[test]
+    fn open_with_key_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = vp(dir.path());
+        let mut v = Vault::create(&path, "master-pass-1").unwrap();
+        v.data.entries.push(Entry::new("Gmail".into(), "u".into(), "p".into(), "".into(), "".into(), 1));
+        v.save().unwrap();
+        let key = v.export_key();
+        drop(v);
+        // 正确密钥 → 解锁成功且数据完整
+        let v2 = Vault::open_with_key(&path, &key).unwrap();
+        assert_eq!(v2.data.entries.len(), 1);
+        assert_eq!(v2.data.entries[0].app_name, "Gmail");
+        // 解锁后可正常保存（密钥/salt 一致）
+        let mut v2 = v2;
+        v2.data.entries.push(Entry::new("B".into(), "".into(), "".into(), "".into(), "".into(), 2));
+        v2.save().unwrap();
+        let v3 = Vault::open(&path, "master-pass-1").unwrap();
+        assert_eq!(v3.data.entries.len(), 2);
+    }
+
+    #[test]
+    fn open_with_wrong_key_fails_uniformly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = vp(dir.path());
+        Vault::create(&path, "master-pass-1").unwrap();
+        let wrong = [9u8; KEY_LEN];
+        let err = Vault::open_with_key(&path, &wrong).unwrap_err();
+        // 安全要求：不泄露失败细节，与密码错误/文件损坏同一错误
+        assert!(matches!(err, VaultError::WrongPasswordOrCorrupt));
     }
 }
