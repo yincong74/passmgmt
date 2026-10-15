@@ -28,6 +28,10 @@ android {
         create("release") {
             // 发布签名：环境变量注入，keystore 不进 git
             System.getenv("PMGR_KEYSTORE_PATH")?.let {
+                // 部分配置时尽早报出明确的中文错误，而不是 packageRelease 阶段的隐晦失败
+                require(!System.getenv("PMGR_KEYSTORE_PASSWORD").isNullOrEmpty()) { "PMGR_KEYSTORE_PASSWORD 未设置" }
+                require(!System.getenv("PMGR_KEY_ALIAS").isNullOrEmpty()) { "PMGR_KEY_ALIAS 未设置" }
+                require(!System.getenv("PMGR_KEY_PASSWORD").isNullOrEmpty()) { "PMGR_KEY_PASSWORD 未设置" }
                 storeFile = file(it)
                 storePassword = System.getenv("PMGR_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("PMGR_KEY_ALIAS")
@@ -56,7 +60,9 @@ android {
             )
             // 未配置 PMGR_KEYSTORE_PATH 时回落 debug 签名（仅本地调试）
             signingConfig = if (System.getenv("PMGR_KEYSTORE_PATH") != null)
-                signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+                signingConfigs.getByName("release") else signingConfigs.getByName("debug").also {
+                    println("警告：未配置 PMGR_KEYSTORE_PATH，本次 release 回落 debug 签名，仅限本地调试，请勿分发")
+                }
         }
     }
     kotlinOptions {
