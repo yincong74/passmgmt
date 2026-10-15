@@ -277,6 +277,13 @@ impl Vault {
         self.save()
     }
 
+    /// 字节版导入备份（Android：前端经 fs 插件读 content URI 后传入）。
+    pub fn import_backup_bytes(&mut self, bytes: &[u8], password: &str) -> Result<(), VaultError> {
+        let imported = decrypt_backup_bytes(bytes, password)?;
+        self.data = imported;
+        self.save()
+    }
+
     /// 用裸密钥直接解锁（跳过 Argon2）。仅供生物识别等已持有密钥的可信路径使用；
     /// GCM 校验失败统一返回 WrongPasswordOrCorrupt，不泄露失败原因。
     pub fn open_with_key(path: impl Into<PathBuf>, key: &[u8; KEY_LEN]) -> Result<Self, VaultError> {
@@ -318,7 +325,12 @@ pub fn export_backup(vault_path: &Path, dest: &Path) -> Result<(), VaultError> {
 /// 验证并解密一个备份/vault 文件，返回明文数据（不改变任何文件）。
 pub fn decrypt_backup(src: &Path, password: &str) -> Result<VaultData, VaultError> {
     let bytes = std::fs::read(src)?;
-    let parts = decode_file(&bytes)?;
+    decrypt_backup_bytes(&bytes, password)
+}
+
+/// 字节版：供 Android 等经 IPC 传入文件内容的路径使用（content URI 无法用 std::fs 读）。
+pub fn decrypt_backup_bytes(bytes: &[u8], password: &str) -> Result<VaultData, VaultError> {
+    let parts = decode_file(bytes)?;
     let key = derive_key(password, &parts.salt, parts.params.0, parts.params.1, parts.params.2)?;
     let plaintext = decrypt_payload(&key, &parts.nonce, &parts.ciphertext)?;
     serde_json::from_slice(&plaintext).map_err(|_| VaultError::WrongPasswordOrCorrupt)
@@ -627,7 +639,7 @@ mod vault_tests {
         let mut v = Vault::create(&path, "master-pass-1").unwrap();
         v.data.entries.push(Entry::new("Gmail".into(), "u".into(), "p".into(), "".into(), "".into(), 1));
         v.save().unwrap();
-        let key = v.export_key();
+        let key: Zeroizing<[u8; KEY_LEN]> = v.export_key();
         drop(v);
         // 正确密钥 → 解锁成功且数据完整
         let v2 = Vault::open_with_key(&path, &key).unwrap();
@@ -650,5 +662,39 @@ mod vault_tests {
         let err = Vault::open_with_key(&path, &wrong).unwrap_err();
         // 安全要求：不泄露失败细节，与密码错误/文件损坏同一错误
         assert!(matches!(err, VaultError::WrongPasswordOrCorrupt));
+    }
+
+    #[test]
+    fn import_backup_bytes_replaces_data() {
+        // 备份文件（password-B2）→ 字节读入 → 导入当前库（password-A1）
+        let dir = tempfile::tempdir().unwrap();
+        let path_a = dir.path().join("a.enc");
+        let mut va = Vault::create(&path_a, "password-A1").unwrap();
+        va.data.entries.push(Entry::new("AppA".into(), "".into(), "".into(), "".into(), "".into(), 1));
+        va.save().unwrap();
+        let path_b = dir.path().join("b.enc");
+        {
+            let mut vb = Vault::create(&path_b, "password-B2").unwrap();
+            vb.data.entries.push(Entry::new("AppB".into(), "".into(), "".into(), "".into(), "".into(), 2));
+            vb.save().unwrap();
+        }
+        let bytes = std::fs::read(&path_b).unwrap();
+        // 错误密码 → 拒绝，数据不变
+        assert!(va.import_backup_bytes(&bytes, "wrong-pass").is_err());
+        assert_eq!(va.data.entries[0].app_name, "AppA");
+        // 正确密码 → 替换并用当前密钥重加密落盘
+        va.import_backup_bytes(&bytes, "password-B2").unwrap();
+        assert_eq!(va.data.entries[0].app_name, "AppB");
+        drop(va);
+        let reopened = Vault::open(&path_a, "password-A1").unwrap();
+        assert_eq!(reopened.data.entries[0].app_name, "AppB");
+    }
+
+    #[test]
+    fn decrypt_backup_bytes_rejects_garbage() {
+        assert!(matches!(
+            decrypt_backup_bytes(b"not a vault file at all", "pw"),
+            Err(VaultError::Format(_)) | Err(VaultError::WrongPasswordOrCorrupt)
+        ));
     }
 }
