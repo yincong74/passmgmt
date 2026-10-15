@@ -1,4 +1,5 @@
 import * as api from "../api";
+import { state } from "../state";
 import { showScreen } from "./screens";
 
 let wired = false;
@@ -15,6 +16,17 @@ function strength(pw: string): string {
 
 /** 显示解锁屏（vault 不存在则显示创建表单）。可重复调用；事件只绑定一次。 */
 export async function initLock(onUnlocked: () => Promise<void>): Promise<void> {
+  // 安全约定（AGENTS.md）：锁定时清空前端明文缓存，JS 侧不残留条目明文
+  state.entries = [];
+  state.selectedId = null;
+  state.query = "";
+  state.showPassword = false;
+  // 隐藏的 #screen-main 里旧渲染结果仍是明文 DOM，一并擦除（enterMain→renderAll 会重新填充）
+  const list = document.getElementById("entry-list");
+  const detail = document.getElementById("entry-detail");
+  if (list) list.innerHTML = "";
+  if (detail) detail.innerHTML = "";
+
   const status = await api.vaultStatus();
   document.getElementById("lock-create-fields")!.classList.toggle("hidden", status.exists);
   document.getElementById("lock-unlock-fields")!.classList.toggle("hidden", !status.exists);
