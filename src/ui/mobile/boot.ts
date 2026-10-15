@@ -28,19 +28,19 @@ async function checkAutoLock(): Promise<void> {
 
 export async function bootMobile(): Promise<void> {
   installShell();
-  const st = await api.vaultStatus().catch(() => null);
-  if (st?.unlocked) await enterMobileMain();
-  else await showMobileLock();
-  // Rust 侧自动锁定线程触发时回到解锁屏
-  await listen("vault-locked", () => { void showMobileLock(); });
 
+  // 先装监听与定时器，再做初始渲染：即使初始渲染异常，Rust 自动锁定事件也不会丢失（review I1）
+  await listen("vault-locked", () => { void showMobileLock(); });
   window.addEventListener("touchstart", bump, { passive: true });
   window.addEventListener("click", bump);
   window.addEventListener("keydown", bump);
-
   // 前端自动锁定：15 秒定时 + 回前台立即检查（Android 后台冻结时定时器停走，靠墙钟差值补判）
   window.setInterval(() => { void checkAutoLock(); }, 15_000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void checkAutoLock();
   });
+
+  const st = await api.vaultStatus().catch(() => null);
+  if (st?.unlocked) await enterMobileMain().catch(() => { void showMobileLock(); });
+  else await showMobileLock();
 }

@@ -26,7 +26,11 @@ async function tryBiometricUnlock(): Promise<boolean> {
   } catch {
     return false; // 用户取消或生物识别失败 → 回落主密码，不失效注册
   }
-  if (!keyHex) return false;
+  if (!keyHex) {
+    // 标记存在但 Keystore 条目已丢失（数据恢复/系统清理）→ 清理孤儿标记（review M2）
+    await api.biometricSetEnabled(false).catch(() => {});
+    return false;
+  }
   try {
     await api.vaultUnlockWithKey(keyHex);
     return true;
@@ -83,15 +87,29 @@ export async function showMobileLock(): Promise<void> {
       if (!pw) return;
       try {
         await api.vaultUnlock(pw);
-        await enterMobileMain();
       } catch {
         // 安全要求：统一笼统文案，不区分密码错误与文件损坏
         showErr("主密码错误，或数据文件已损坏");
+        return;
+      }
+      try {
+        await enterMobileMain();
+      } catch {
+        showErr("数据加载失败，请重试");
       }
     };
+    document.getElementById("m-unlock-pw")!.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") (document.getElementById("m-btn-unlock") as HTMLButtonElement).click();
+    });
     // 已开启生物识别 → 自动弹指纹（表单已渲染，取消即回落）
     if (await api.biometricEnabled().catch(() => false)) {
-      if (await tryBiometricUnlock()) await enterMobileMain();
+      if (await tryBiometricUnlock()) {
+        try {
+          await enterMobileMain();
+        } catch {
+          showErr("数据加载失败，请重试");
+        }
+      }
     }
   } else {
     document.getElementById("m-btn-create")!.onclick = async () => {
@@ -106,5 +124,10 @@ export async function showMobileLock(): Promise<void> {
         showErr(String(e));
       }
     };
+    for (const id of ["m-create-pw1", "m-create-pw2"]) {
+      document.getElementById(id)!.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") (document.getElementById("m-btn-create") as HTMLButtonElement).click();
+      });
+    }
   }
 }
