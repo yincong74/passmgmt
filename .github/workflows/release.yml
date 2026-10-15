@@ -47,7 +47,51 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Password Manager v__VERSION__"
-          releaseBody: "Windows: 下载 -setup.exe 安装。Linux: 下载 AppImage（chmod +x 后运行）或 .deb（sudo apt install ./xxx.deb）。"
+          releaseBody: "Windows: 下载 -setup.exe 安装。Linux: 下载 AppImage（chmod +x 后运行）或 .deb（sudo apt install ./xxx.deb）。Android: 下载 arm64 APK 侧载安装（需允许未知来源；覆盖升级须安装同一签名构建的版本）。"
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Decode release keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > /tmp/pmgr-release.keystore
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PMGR_KEYSTORE_PATH: /tmp/pmgr-release.keystore
+          PMGR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PMGR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          PMGR_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Password Manager v__VERSION__"
+          releaseBody: "Windows: 下载 -setup.exe 安装。Linux: 下载 AppImage（chmod +x 后运行）或 .deb（sudo apt install ./xxx.deb）。Android: 下载 arm64 APK 侧载安装（需允许未知来源；覆盖升级须安装同一签名构建的版本）。"
+          releaseDraft: true
+          prerelease: false
+          args: android build --target aarch64 --apk
