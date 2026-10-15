@@ -1047,6 +1047,8 @@ git commit -m "feat(ui): main.ts 平台分流——Android 动态加载手机 UI
 - Create: `src/ui/mobile/bio.ts`
 - Modify: `src/ui/mobile/boot.ts`（替换 Task 10 占位）
 
+> **审查后修正（commit b05f1e8）**：shell.ts 增加模块级 `locked` 标志——`resetStack()` 置 true、`switchTab()` 置 false、popstate 处理器首行 `if (locked) { showTabbar(false); return; }`，堵住「锁定屏上系统返回手势触发 popstate 重渲染数据页」的明文回放漏洞（review C1）；boot.ts 的 `vaultStatus()` 加 `.catch(() => null)` 容错。下方代码块以实际提交为准。
+
 - [ ] **Step 1: 创建 `src/ui/mobile/bio.ts`**（与 Rust `biometric.rs` 的 `KEYSTORE_ALIAS` 保持一致）
 
 ```ts
@@ -1316,6 +1318,7 @@ import { KEY_ALIAS } from "./bio";
 import { resetStack, switchTab } from "./shell";
 
 export async function enterMobileMain(): Promise<void> {
+  onLock = false;
   state.entries = await api.entriesList();
   state.settings = await api.settingsGet();
   state.query = "";
@@ -1365,14 +1368,23 @@ const CREATE_FORM = `
   <input type="password" id="m-create-pw2" placeholder="确认主密码" autocomplete="off" />
   <button id="m-btn-create" class="primary m-big" type="button">创建并进入</button>`;
 
-/** 显示解锁屏（幂等：已在解锁屏则不重复渲染，避免指纹弹窗叠加）。 */
+/** 显示解锁屏（同步幂等标志防 vault-locked 事件与定时检查并发双弹指纹，review M4）。 */
+let onLock = false;
+
 export async function showMobileLock(): Promise<void> {
-  if (document.getElementById("m-unlock-pw") || document.getElementById("m-create-pw1")) return;
+  if (onLock) return;
+  onLock = true;
   resetStack();
+  // 纵深防御（review I1，AGENTS.md 清零约定）：锁定即清空前端明文缓存——
+  // Rust 侧已 zeroize，JS 侧不得残留条目明文
+  state.entries = [];
+  state.selectedId = null;
+  state.query = "";
+  state.showPassword = false;
   const status = await api.vaultStatus();
   const el = document.getElementById("m-pages")!;
   el.innerHTML = `<div class="m-lock"><div class="m-lock-box">
-      <h1 style="text-align:center">🔐 密码管理器</h1>
+      <h1>🔐 密码管理器</h1>
       ${status.exists ? UNLOCK_FORM : CREATE_FORM}
       <div id="m-lock-error" class="error hidden"></div>
     </div></div>`;
@@ -1472,7 +1484,7 @@ function renderMList(): void {
       </div>`,
         )
         .join("")
-    : `<p class="m-hint" style="padding:16px">${
+    : `<p class="m-hint m-empty">${
         state.query ? "无匹配条目" : "还没有条目，点击右下「＋」新建"
       }</p>`;
   el.querySelectorAll<HTMLElement>(".m-card").forEach((c) => {
@@ -1520,11 +1532,11 @@ export async function renderDetail(el: HTMLElement, id: string): Promise<void> {
         </div>
       </div>
       ${e.url ? `<div class="m-detail-row"><span class="k">URL</span><span class="v">${esc(e.url)}</span></div>` : ""}
-      ${e.notes ? `<div class="m-detail-row"><span class="k">备注</span><span class="v" style="white-space:pre-wrap">${esc(e.notes)}</span></div>` : ""}
+      ${e.notes ? `<div class="m-detail-row"><span class="k">备注</span><span class="v m-pre-wrap">${esc(e.notes)}</span></div>` : ""}
       <p class="m-hint">创建：${fmtTime(e.created_at)} ・ 更新：${fmtTime(e.updated_at)}</p>
       <div class="m-row">
-        <button class="primary m-big" id="d-edit" type="button" style="flex:1">编辑</button>
-        <button class="danger m-big" id="d-del" type="button" style="flex:1">删除</button>
+        <button class="primary m-big m-flex1" id="d-edit" type="button">编辑</button>
+        <button class="danger m-big m-flex1" id="d-del" type="button">删除</button>
       </div>
     </div>`;
 
@@ -1733,8 +1745,8 @@ export function renderGenerate(el: HTMLElement): void {
       <label class="m-inline"><input id="g-amb" type="checkbox" checked /> 排除易混淆字符 0O1lI|</label>
       <output id="g-out" class="m-gen-out"></output>
       <div class="m-row">
-        <button class="primary m-big" id="g-go" type="button" style="flex:1">生成</button>
-        <button class="m-big" id="g-copy" type="button" style="flex:1">复制</button>
+        <button class="primary m-big m-flex1" id="g-go" type="button">生成</button>
+        <button class="m-big m-flex1" id="g-copy" type="button">复制</button>
       </div>
     </div>`;
 
