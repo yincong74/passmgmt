@@ -9,7 +9,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@impierce/tauri-plugin-keystore": "^2.1.0-alpha.2",
+    "@impierce/tauri-plugin-keystore": "2.1.0-alpha.2",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-biometric": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2",
