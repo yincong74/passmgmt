@@ -24,6 +24,17 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("release") {
+            // 发布签名：环境变量注入，keystore 不进 git
+            System.getenv("PMGR_KEYSTORE_PATH")?.let {
+                storeFile = file(it)
+                storePassword = System.getenv("PMGR_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PMGR_KEY_ALIAS")
+                keyPassword = System.getenv("PMGR_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -43,6 +54,9 @@ android {
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()
             )
+            // 未配置 PMGR_KEYSTORE_PATH 时回落 debug 签名（仅本地调试）
+            signingConfig = if (System.getenv("PMGR_KEYSTORE_PATH") != null)
+                signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
     kotlinOptions {
