@@ -5,7 +5,7 @@
 ## 项目结构
 
 - `core/`（crate `pmgr-core`）：数据模型、Argon2id + AES-256-GCM 加密、密码生成。纯 Rust、无 GUI 依赖，单元测试主要在这里。
-- `src-tauri/`（crate `pmgr-gui`）：`lib.rs` 是统一入口（`run()` 带 `#[cfg_attr(mobile, tauri::mobile_entry_point)]`，桌面 bin 与 Android JNI 共用；`main.rs` 只是薄壳）、Tauri IPC 命令（`commands.rs`）、剪贴板（`clipboard.rs`，cfg 分派：桌面 arboard / Android clipboard-manager 插件）、应用状态与自动锁定线程（`state.rs`）、生物识别解锁（`biometric.rs`，仅 mobile 编译）。
+- `src-tauri/`（crate `pmgr-gui`）：`lib.rs` 是统一入口（`run()`，桌面 bin 与 Android JNI 共用；`main.rs` 只是薄壳）、Tauri IPC 命令（`commands.rs`）、剪贴板（`clipboard.rs`，cfg 分派：桌面 arboard / Android clipboard-manager 插件）、应用状态与自动锁定线程（`state.rs`）、生物识别解锁（`biometric.rs`，仅 mobile 编译）。
 - `src/`：前端。所有 `invoke` 调用统一封装在 `src/api.ts`，桌面 UI 按屏幕拆分在 `src/ui/`；手机专属 UI 在 `src/ui/mobile/`（底部 Tab + history 页面栈），`main.ts` 启动时按 `platform()`（plugin-os）分流。
 - 设计文档：`docs/superpowers/specs/2026-09-26-password-manager-design.md`；Android 版：`docs/superpowers/specs/2026-10-15-android-app-design.md`（下文简称 Android spec）。
 
@@ -23,7 +23,7 @@ cargo test -p pmgr-core vault::tests::<测试名>   # 跑单个测试
 
 - 没有 ESLint/Prettier/rustfmt 配置；TS 类型检查只靠 `tsc --noEmit`（strict），构建前会自动跑。
 - 前端没有测试框架，全部测试在 Rust 侧——可测试的逻辑应下沉到 `core/`。
-- 环境：Rust stable（Windows 用 MSVC 工具链）、Node ≥ 20；Linux 另需 webkit2gtk 等系统依赖（见 README）；android 命令需 Android SDK/NDK + JDK 17 + `rustup target add aarch64-linux-android` + cargo-ndk（Android spec §8.1），且首次需 `npm run tauri android init` 生成 `src-tauri/gen/android`。
+- 环境：Rust stable（Windows 用 MSVC 工具链）、Node ≥ 20；Linux 另需 webkit2gtk 等系统依赖（见 README）；android 命令需 Android SDK/NDK + JDK 17 等（Android spec §8.1），首次需 `npm run tauri android init`。
 
 ## 新增 IPC 命令的流程（缺一不可）
 
@@ -33,7 +33,10 @@ cargo test -p pmgr-core vault::tests::<测试名>   # 跑单个测试
 4. 参数命名：前端传 camelCase（如 `masterPassword`），Rust 参数是 snake_case（`master_password`），Tauri 自动转换，两边不要写成一致风格。
 5. mobile 专属命令放 `#[cfg(mobile)]` 模块（见 `biometric.rs`），`generate_handler![]` 条目同样加 `#[cfg(mobile)]`；前端直接调用的插件 API（fs/biometric/keystore 等）要在 `src-tauri/capabilities/` 登记权限——Android 专属放 `mobile.json`（`platforms: ["android"]`），跨平台的（dialog/os）放 `default.json`。
 
-Rust → 前端只有一个事件：`vault-locked`（自动锁定线程 emit，桌面 `src/main.ts` / 手机 `src/ui/mobile/boot.ts` 监听后回解锁屏）。自动锁定是双实现：Rust 线程兜底（每 30s）+ 前端定时器（每 15s，手机端另在 `visibilitychange` 回前台时立即补查一次）。Rust 侧超时判定是双钟：`Activity{monotonic, wall}`，`should_auto_lock_dual` 取单调钟与墙钟流逝的较大者（Android 深睡时单调钟停走，靠墙钟补漏锁；墙钟被回拨时单调钟兜底）。改锁定逻辑要同时看 `state.rs`、`main.ts` 和 `src/ui/mobile/boot.ts`。
+- Rust → 前端只有一个事件：`vault-locked`（自动锁定线程 emit，桌面 `src/main.ts` / 手机 `src/ui/mobile/boot.ts` 监听后回解锁屏）。
+- 自动锁定是双实现：Rust 线程兜底（每 30s）+ 前端定时器（每 15s，手机端另在 `visibilitychange` 回前台时立即补查一次）。
+- Rust 侧超时判定是双钟：`Activity{monotonic, wall}`，`should_auto_lock_dual` 取单调钟与墙钟流逝的较大者（Android 深睡时单调钟停走，靠墙钟补漏锁；墙钟被回拨时单调钟兜底）。
+- 改锁定逻辑要同时看 `state.rs`、`main.ts` 和 `src/ui/mobile/boot.ts`。
 
 ## 安全约定（改代码必须遵守）
 
@@ -57,4 +60,4 @@ Rust → 前端只有一个事件：`vault-locked`（自动锁定线程 emit，�
 ## 构建产物
 
 - 勿手改（已 gitignore）：`dist/`、`target/`、`src-tauri/gen/schemas/`（Tauri 生成的 capability schema）。
-- `src-tauri/gen/android` 例外：它是 `tauri android init` 生成的 Android 工程，**提交进仓库**，生成后归项目所有（可改签名配置与 Manifest）。当前分支尚未生成，待 Android SDK 环境就绪后补（Android spec §8.1）。
+- `src-tauri/gen/android` 例外：它是 `tauri android init` 生成的 Android 工程，生成后应提交进仓库（归项目所有，可改签名配置与 Manifest）。当前尚未生成，待 Android SDK 环境就绪后补（Android spec §8.1）。
