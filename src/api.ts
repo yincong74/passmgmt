@@ -57,3 +57,11 @@ export const masterPasswordChange = (oldPassword: string, newPassword: string): 
 export const backupExportData = (): Promise<number[]> => invoke("backup_export_data");
 export const backupImportData = (data: number[], backupPassword: string): Promise<void> =>
   invoke("backup_import_data", { data, backupPassword });
+
+// ---- 生物识别（仅 Android；桌面端后端未注册这些命令，调用会 reject） ----
+export const biometricEnabled = (): Promise<boolean> => invoke("biometric_enabled");
+export const biometricSetEnabled = (enabled: boolean): Promise<void> =>
+  invoke("biometric_set_enabled", { enabled });
+export const biometricExportKey = (): Promise<string> => invoke("biometric_export_key");
+export const vaultUnlockWithKey = (keyHex: string): Promise<void> =>
+  invoke("vault_unlock_with_key", { keyHex });

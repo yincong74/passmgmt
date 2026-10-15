@@ -50,6 +50,9 @@ pub fn vault_create(
     }
     let result = Vault::create(&path, &master_password).map_err(|e| e.to_string());
     master_password.zeroize();
+    // 新建库 = 新密钥，旧生物识别注册必然失效（spec §7.4）
+    #[cfg(mobile)]
+    let _ = crate::biometric::set_flag(&app, false);
     *state.vault.lock().unwrap() = Some(result?);
     Ok(())
 }
@@ -199,6 +202,7 @@ pub fn backup_import(
 
 #[tauri::command]
 pub fn master_password_change(
+    app: AppHandle,
     state: State<'_, AppState>,
     mut old_password: String,
     mut new_password: String,
@@ -214,6 +218,13 @@ pub fn master_password_change(
             other => other.to_string(),
         })
     });
+    if result.is_ok() {
+        // 改密后 vault 密钥已更换，生物识别注册自动失效（spec §7.4）
+        #[cfg(mobile)]
+        let _ = crate::biometric::set_flag(&app, false);
+        #[cfg(not(mobile))]
+        let _ = &app;
+    }
     old_password.zeroize();
     new_password.zeroize();
     result

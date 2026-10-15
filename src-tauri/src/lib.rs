@@ -1,4 +1,6 @@
 //! 应用组合根：Builder、插件与 IPC handler 注册（桌面 bin 与 Android JNI 共用入口）。
+#[cfg(mobile)]
+mod biometric;
 mod clipboard;
 mod commands;
 mod state;
@@ -37,7 +39,15 @@ pub fn run() {
             commands::master_password_change,
             commands::clipboard_copy,
             commands::backup_export_data,
-            commands::backup_import_data
+            commands::backup_import_data,
+            #[cfg(mobile)]
+            biometric::biometric_enabled,
+            #[cfg(mobile)]
+            biometric::biometric_set_enabled,
+            #[cfg(mobile)]
+            biometric::biometric_export_key,
+            #[cfg(mobile)]
+            biometric::vault_unlock_with_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
