@@ -12,8 +12,8 @@ import { toast } from "../toast";
 import { KEY_ALIAS } from "./bio";
 import { showMobileLock } from "./lock";
 
-/** 导入备份文件大小上限（review Task8#3：number[] JSON 桥约有 3-4 倍膨胀，防止误选大文件打爆内存） */
-const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
+/** 导入备份文件大小上限（number[] JSON 桥约 3-4 倍膨胀，移动 WebView 堆有限；真实 vault.enc 远小于 1 MB，10 MB 上限足够宽松，review Task15 I1） */
+const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
 
 function numVal(id: string): number {
   const v = Number((document.getElementById(id) as HTMLInputElement).value);
@@ -24,12 +24,12 @@ function pwVal(id: string): string {
 }
 
 async function enableBiometric(): Promise<void> {
-  const st = await checkStatus();
-  if (!st.isAvailable || st.biometryType === BiometryType.None) {
-    toast("设备未录入指纹/人脸，请先在系统设置中添加");
-    return;
-  }
   try {
+    const st = await checkStatus();
+    if (!st.isAvailable || st.biometryType === BiometryType.None) {
+      toast("设备未录入指纹/人脸，请先在系统设置中添加");
+      return;
+    }
     const keyHex = await api.biometricExportKey();
     await store(KEY_ALIAS, keyHex, {
       title: "开启生物识别解锁",
@@ -39,14 +39,20 @@ async function enableBiometric(): Promise<void> {
     await api.biometricSetEnabled(true);
     toast("生物识别解锁已开启");
   } catch (e) {
+    // store 成功但后续失败时清理孤儿密文（下次注册同名覆盖，双保险）
+    await remove(KEY_ALIAS).catch(() => {});
     toast(`开启失败：${String(e)}`);
   }
 }
 
 async function disableBiometric(): Promise<void> {
   await remove(KEY_ALIAS).catch(() => {});
-  await api.biometricSetEnabled(false);
-  toast("生物识别解锁已关闭");
+  try {
+    await api.biometricSetEnabled(false);
+    toast("生物识别解锁已关闭");
+  } catch (err) {
+    toast(`关闭失败：${String(err)}`);
+  }
 }
 
 async function exportBackup(): Promise<void> {
@@ -82,6 +88,10 @@ async function importBackup(): Promise<void> {
   if (!ok) return;
   try {
     const bytes = await readFile(String(uri));
+    if (bytes.length > MAX_BACKUP_BYTES) {
+      toast(`文件过大（${Math.round(bytes.length / 1024 / 1024)} MB），不是有效的备份文件`);
+      return;
+    }
     await api.backupImportData(Array.from(bytes), backupPw);
     (document.getElementById("m-set-importpw") as HTMLInputElement).value = "";
     toast("导入成功，正在重新载入…");
@@ -149,6 +159,9 @@ export async function renderSettings(el: HTMLElement): Promise<void> {
     const newPw = pwVal("m-set-newpw");
     if (newPw.length < 8) { toast("新主密码至少 8 位"); return; }
     if (newPw !== pwVal("m-set-newpw2")) { toast("两次输入的新密码不一致"); return; }
+    // 防双击重复提交（review Task15 M3，同 editor.ts 保存按钮模式）
+    const chpwBtn = document.getElementById("m-set-chpw") as HTMLButtonElement;
+    chpwBtn.disabled = true;
     try {
       await api.masterPasswordChange(oldPw, newPw);
       // Rust 侧已自动失效标记；这里清理 Keystore 残留密文（同名注册会覆盖，失败可忽略）
@@ -159,6 +172,7 @@ export async function renderSettings(el: HTMLElement): Promise<void> {
       toast(bioOn ? "主密码已修改，生物识别解锁已关闭，如需请重新开启" : "主密码已修改");
       await renderSettings(el);
     } catch (err) {
+      chpwBtn.disabled = false;
       toast(String(err));
     }
   };
