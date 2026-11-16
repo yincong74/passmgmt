@@ -2231,7 +2231,7 @@ git commit -m "docs: AGENTS.md/README 同步 Android 版结构、命令、安全
 - 1–4、6、8–10 全部通过：创建/CRUD/搜索/复制三行为（写入、比较后清除、定时清除，用 IME 剪贴板条作 oracle）/生成器/自动锁定 1 分钟/指纹注册→冷启动自动弹→解锁/改密自动失效→可重注册/SAF 导出（Download 落盘、magic `PMGR\x01`）/卸载重装导入恢复/删除 confirm 双路径。
 - 5 变体通过：前台空闲超时锁定 + 退后台回前台状态保留；深睡墙钟路径由 `should_auto_lock_dual` 单元测试覆盖。
 - 7 补测通过：指纹弹窗「改用主密码」→ 密码解锁成功且注册不失效（再锁仍自动弹）。
-- 11（桌面 .enc 跨端导入）未单测：与 9/10 同一条 core 导入路径（`import_backup_bytes`，单元测试覆盖字节一致性与重加密）；留真机/桌面联测可选。
+- 11 跨端实测闭环（2026-11-16 补测，双向）：方向 B＝安卓 UI 导出 .enc → 桌面命令实体（`Vault::import_backup`）导入桌面式新库，条目逐字段一致且本地密码可重开；方向 A＝桌面命令实体（`Vault::create`+`export_backup`，即桌面 vault_create/backup_export 所调函数）生成 .enc → push 进模拟器 → 安卓 UI 走 SAF 导入，Desktop-Origin-1/2 完整替换安卓条目，详情密码/URL/中文备注/原始时间戳逐字段无损。辅助工具为临时 cargo 工程（core 路径依赖），未入仓库。
 - 12 桌面冒烟：本会话未改桌面代码（仅此前 viewport 一行，已真机验证）；桌面回归由 cargo test + tsc 保证。
 - 稳定性：横竖屏旋转与后台切换不丢 WebView 状态；logcat 本进程无 panic/JS error/FATAL（仅 x86 转译与 HWUI 平台噪音）。
 - 方法学备注：ESC 不收此 WebView 的 IME（须 BACK）；FLAG_SECURE 表面（BiometricPrompt/PIN）截屏全黑，用 uiautomator 控件树作 oracle；模拟器 SurfaceFlinger 安全弹窗后偶发截屏全黑，POWER 循环恢复。
