@@ -2224,6 +2224,19 @@ git commit -m "docs: AGENTS.md/README 同步 Android 版结构、命令、安全
 
 - [ ] **Step 2: 发现的问题逐个走 systematic-debugging 修复并补提交**；涉及设计变更的先更新 spec 再改码。
 
+### 验收记录（2026-11-16，模拟器）
+
+真机不在场期间，用 Android 模拟器（AVD pixel_6 / API 35 google_apis x86_64 / WHPX）完成本清单的自动化验收；**arm64 release APK 直装**（镜像含 arm64 转译层），全流程 adb 驱动（input/uiautomator/screencap），指纹用 `adb emu finger touch`。结果：
+
+- 1–4、6、8–10 全部通过：创建/CRUD/搜索/复制三行为（写入、比较后清除、定时清除，用 IME 剪贴板条作 oracle）/生成器/自动锁定 1 分钟/指纹注册→冷启动自动弹→解锁/改密自动失效→可重注册/SAF 导出（Download 落盘、magic `PMGR\x01`）/卸载重装导入恢复/删除 confirm 双路径。
+- 5 变体通过：前台空闲超时锁定 + 退后台回前台状态保留；深睡墙钟路径由 `should_auto_lock_dual` 单元测试覆盖。
+- 7 补测通过：指纹弹窗「改用主密码」→ 密码解锁成功且注册不失效（再锁仍自动弹）。
+- 11（桌面 .enc 跨端导入）未单测：与 9/10 同一条 core 导入路径（`import_backup_bytes`，单元测试覆盖字节一致性与重加密）；留真机/桌面联测可选。
+- 12 桌面冒烟：本会话未改桌面代码（仅此前 viewport 一行，已真机验证）；桌面回归由 cargo test + tsc 保证。
+- 稳定性：横竖屏旋转与后台切换不丢 WebView 状态；logcat 本进程无 panic/JS error/FATAL（仅 x86 转译与 HWUI 平台噪音）。
+- 方法学备注：ESC 不收此 WebView 的 IME（须 BACK）；FLAG_SECURE 表面（BiometricPrompt/PIN）截屏全黑，用 uiautomator 控件树作 oracle；模拟器 SurfaceFlinger 安全弹窗后偶发截屏全黑，POWER 循环恢复。
+- 结论：**未发现新缺陷**；Task 19 真机项中除 OEM 特有行为与跨端 .enc 外均已在模拟器闭环。发布前真机复核仍建议但非阻塞。
+
 ---
 
 ## 风险与回退备忘（实施者须知）
