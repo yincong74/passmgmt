@@ -1,6 +1,6 @@
 [package]
 name = "pmgr-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "密码管理器核心逻辑：数据模型、加密、密码生成（无 GUI 依赖）"
 
