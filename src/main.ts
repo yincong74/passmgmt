@@ -2,7 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { platform } from "@tauri-apps/plugin-os";
 import * as api from "./api";
 import { state } from "./state";
-import { initLock } from "./ui/lock";
+import { initLock, setOnUnlocked } from "./ui/lock";
 import { enterMain, initMain } from "./ui/list";
 
 async function onUnlocked(): Promise<void> {
@@ -36,6 +36,8 @@ async function boot(): Promise<void> {
   }
 
   initMain(onUnlocked);
+  // 受保护命令报「未解锁」时 handleLockedError 跳回解锁屏要用（设计 §196）
+  setOnUnlocked(onUnlocked);
   const st = await api.vaultStatus();
   if (st.unlocked) await enterMain();
   else await initLock(onUnlocked);

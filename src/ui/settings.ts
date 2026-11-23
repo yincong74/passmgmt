@@ -5,6 +5,7 @@ import {
 } from "@tauri-apps/plugin-dialog";
 import * as api from "../api";
 import { state } from "../state";
+import { handleLockedError } from "./lock";
 import { toast } from "./toast";
 
 function numVal(id: string): number {
@@ -41,6 +42,7 @@ export async function openSettings(): Promise<void> {
       state.settings = s;
       toast("设置已保存");
     } catch (err) {
+      if (await handleLockedError(err)) return;
       toast(`保存失败：${String(err)}`);
     }
   };
@@ -55,6 +57,7 @@ export async function openSettings(): Promise<void> {
       clearPw();
       toast("主密码已修改");
     } catch (err) {
+      if (await handleLockedError(err)) return;
       toast(String(err));
     }
   };
@@ -70,6 +73,7 @@ export async function openSettings(): Promise<void> {
       await api.backupExport(path);
       toast("备份已导出（加密文件，请妥善保管）");
     } catch (err) {
+      if (await handleLockedError(err)) return;
       toast(`导出失败：${String(err)}`);
     }
   };
@@ -94,6 +98,7 @@ export async function openSettings(): Promise<void> {
       toast("导入成功，正在重新载入…");
       window.setTimeout(() => location.reload(), 800);
     } catch (err) {
+      if (await handleLockedError(err)) return;
       toast(`导入失败：${String(err)}`);
     }
   };

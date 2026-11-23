@@ -2,7 +2,7 @@ import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import * as api from "../api";
 import { state } from "../state";
 import { openEditor } from "./editor";
-import { initLock } from "./lock";
+import { initLock, handleLockedError } from "./lock";
 import { showScreen } from "./screens";
 import { openSettings } from "./settings";
 import { toast } from "./toast";
@@ -131,6 +131,7 @@ function renderDetail(): void {
       renderAll();
       toast("已删除");
     } catch (err) {
+      if (await handleLockedError(err)) return;
       toast(`删除失败：${String(err)}`);
     }
   };

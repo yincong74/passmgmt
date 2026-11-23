@@ -1,4 +1,5 @@
 import * as api from "../api";
+import { handleLockedError } from "./lock";
 import { toast } from "./toast";
 
 function getVal(id: string): string {
@@ -67,6 +68,7 @@ export function openEditor(
       await onSaved(saved);
       toast("已保存");
     } catch (err) {
+      if (await handleLockedError(err)) return;
       toast(`保存失败：${String(err)}`);
     }
   };

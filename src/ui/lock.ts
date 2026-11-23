@@ -1,8 +1,48 @@
 import * as api from "../api";
 import { state } from "../state";
+import { toast } from "./toast";
 import { showScreen } from "./screens";
 
 let wired = false;
+/** 解锁成功回调（main.ts boot 注册）：handleLockedError 跳回解锁屏时复用。 */
+let onUnlockedHook: (() => Promise<void>) | null = null;
+
+export function setOnUnlocked(cb: () => Promise<void>): void {
+  onUnlockedHook = cb;
+}
+
+/** 锁定时收起并清空仍打开的对话框。
+ * 两个 dialog 是悬浮在 screen 之上的独立层（z-index:10），不清会盖住解锁屏、
+ * 让用户困在“看起来能用、实际全部报未解锁”的弹窗里；且输入框里的
+ * 明文密码/条目字段违反 AGENTS.md 锁定清零约定（JS 侧不得残留明文）。 */
+function wipeDialogs(): void {
+  for (const id of ["dialog-editor", "dialog-settings"]) {
+    const dlg = document.getElementById(id);
+    if (!dlg) continue;
+    dlg
+      .querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLOutputElement>(
+        "input, textarea, output",
+      )
+      .forEach((el) => {
+        el.value = "";
+      });
+    // 生成器面板的密码另存于 dataset（editor.ts regenerate），一并擦除
+    dlg.querySelectorAll<HTMLOutputElement>("output").forEach((el) => {
+      delete el.dataset.pw;
+    });
+    dlg.classList.add("hidden");
+  }
+  document.getElementById("ed-gen")?.classList.add("hidden");
+}
+
+/** 受保护命令返回「未解锁」时的统一处理（设计 §196：前端跳回解锁屏）。
+ * 返回 true 表示已接管，调用方无需再 toast 原始错误。 */
+export async function handleLockedError(err: unknown): Promise<boolean> {
+  if (String(err) !== "未解锁") return false;
+  toast("应用已锁定，请重新解锁后再操作");
+  await initLock(onUnlockedHook ?? (async () => {}));
+  return true;
+}
 
 function strength(pw: string): string {
   let score = 0;
@@ -16,6 +56,7 @@ function strength(pw: string): string {
 
 /** 显示解锁屏（vault 不存在则显示创建表单）。可重复调用；事件只绑定一次。 */
 export async function initLock(onUnlocked: () => Promise<void>): Promise<void> {
+  onUnlockedHook = onUnlocked;
   // 安全约定（AGENTS.md）：锁定时清空前端明文缓存，JS 侧不残留条目明文
   state.entries = [];
   state.selectedId = null;
@@ -26,6 +67,8 @@ export async function initLock(onUnlocked: () => Promise<void>): Promise<void> {
   const detail = document.getElementById("entry-detail");
   if (list) list.innerHTML = "";
   if (detail) detail.innerHTML = "";
+  // 仍打开的编辑/设置对话框：收起并清空（盖在解锁屏之上 + 残留明文，见 wipeDialogs）
+  wipeDialogs();
 
   const status = await api.vaultStatus();
   document.getElementById("lock-create-fields")!.classList.toggle("hidden", status.exists);
