@@ -1,6 +1,6 @@
 [package]
 name = "pmgr-gui"
-version = "0.2.0"
+version = "0.2.1"
 description = "密码管理器（Tauri GUI）"
 edition = "2021"
 
